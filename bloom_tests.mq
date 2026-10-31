@@ -1,0 +1,256 @@
+import "bloom"
+| include "test"
+
+def fails(f): try: f() catch: "failed";
+
+def names(prefix, n): map(range(0, n - 1), fn(i): prefix + to_string(i););
+
+def count_true(xs): len(filter(xs, fn(x): x;));
+
+def assert_close(actual, expected, tolerance):
+  assert_true(abs(actual - expected) <= tolerance)
+end
+
+# =========================================================================
+# new and for_capacity
+# =========================================================================
+
+def test_new_is_empty():
+  let bf = bloom::new(100, 3)
+  | assert_eq(bloom::bits(bf), 100)
+  | assert_eq(bloom::hashes(bf), 3)
+  | assert_eq(bloom::count(bf), 0)
+  | assert_eq(bloom::fill_ratio(bf), 0)
+  | assert_false(bloom::contains(bf, "anything"))
+end
+
+def test_new_allocates_whole_words():
+  assert_eq(len(bloom::new(32, 1)), 3 + 1)
+  | assert_eq(len(bloom::new(33, 1)), 3 + 2)
+  | assert_eq(len(bloom::new(1, 1)), 3 + 1)
+  | assert_eq(len(bloom::new(1000, 1)), 3 + 32)
+end
+
+def test_new_rejects_non_positive_sizes():
+  assert_eq(fails(fn(): bloom::new(0, 3);), "failed")
+  | assert_eq(fails(fn(): bloom::new(10, 0);), "failed")
+  | assert_eq(fails(fn(): bloom::new(-5, 3);), "failed")
+end
+
+def test_for_capacity_picks_the_standard_size():
+  let bf = bloom::for_capacity(1000, 0.01)
+  | assert_eq(bloom::bits(bf), 9586)
+  | assert_eq(bloom::hashes(bf), 7)
+end
+
+def test_for_capacity_grows_with_capacity_and_a_tighter_rate():
+  assert_true(bloom::bits(bloom::for_capacity(2000, 0.01)) > bloom::bits(bloom::for_capacity(1000, 0.01)))
+  | assert_true(bloom::bits(bloom::for_capacity(1000, 0.001)) > bloom::bits(bloom::for_capacity(1000, 0.01)))
+  | assert_true(bloom::hashes(bloom::for_capacity(1000, 0.001)) > bloom::hashes(bloom::for_capacity(1000, 0.01)))
+end
+
+def test_for_capacity_always_uses_at_least_one_hash():
+  assert_true(bloom::hashes(bloom::for_capacity(1, 0.9)) >= 1)
+end
+
+def test_for_capacity_rejects_bad_arguments():
+  assert_eq(fails(fn(): bloom::for_capacity(0, 0.01);), "failed")
+  | assert_eq(fails(fn(): bloom::for_capacity(10, 0);), "failed")
+  | assert_eq(fails(fn(): bloom::for_capacity(10, 1);), "failed")
+  | assert_eq(fails(fn(): bloom::for_capacity(10, 1.5);), "failed")
+end
+
+# =========================================================================
+# add and contains
+# =========================================================================
+
+def test_an_added_item_is_contained():
+  let bf = bloom::add(bloom::for_capacity(100, 0.01), "apple")
+  | assert_true(bloom::contains(bf, "apple"))
+end
+
+def test_an_item_that_was_not_added_is_usually_absent():
+  let bf = bloom::add(bloom::for_capacity(100, 0.01), "apple")
+  | assert_false(bloom::contains(bf, "banana"))
+end
+
+def test_adding_an_item_twice_keeps_one_membership_but_counts_twice():
+  let bf = bloom::add(bloom::add(bloom::for_capacity(100, 0.01), "x"), "x")
+  | assert_true(bloom::contains(bf, "x"))
+  | assert_eq(bloom::count(bf), 2)
+end
+
+def test_adding_an_item_twice_does_not_change_the_bits():
+  let once = bloom::add(bloom::for_capacity(100, 0.01), "x")
+  | let twice = bloom::add(once, "x")
+  | assert_eq(slice(once, 3, len(once)), slice(twice, 3, len(twice)))
+end
+
+def test_add_does_not_modify_the_original():
+  let empty = bloom::for_capacity(100, 0.01)
+  | let bf = bloom::add(empty, "apple")
+  | assert_false(bloom::contains(empty, "apple"))
+  | assert_eq(bloom::count(empty), 0)
+  | assert_true(bloom::contains(bf, "apple"))
+end
+
+def test_the_empty_string_is_an_item():
+  let bf = bloom::add(bloom::for_capacity(100, 0.01), "")
+  | assert_true(bloom::contains(bf, ""))
+end
+
+def test_items_are_compared_by_their_string_form():
+  let bf = bloom::add(bloom::for_capacity(100, 0.01), 42)
+  | assert_true(bloom::contains(bf, 42))
+  | assert_true(bloom::contains(bf, "42"))
+  | assert_false(bloom::contains(bf, 43))
+end
+
+def test_arrays_and_dicts_can_be_items():
+  let bf = bloom::add(bloom::add(bloom::for_capacity(100, 0.01), [1, 2]), {"a": 1})
+  | assert_true(bloom::contains(bf, [1, 2]))
+  | assert_true(bloom::contains(bf, {"a": 1}))
+  | assert_false(bloom::contains(bf, [2, 1]))
+end
+
+def test_unicode_items():
+  let bf = bloom::add(bloom::for_capacity(100, 0.01), "日本語")
+  | assert_true(bloom::contains(bf, "日本語"))
+  | assert_false(bloom::contains(bf, "日本"))
+end
+
+def test_there_are_no_false_negatives():
+  let _ = foreach(size, [64, 500, 5000]): do
+      let items = names("item-", 300)
+      | let bf = bloom::add_all(bloom::new(size, 3), items)
+      | assert_eq(count_true(map(items, fn(x): bloom::contains(bf, x);)), 300)
+    end;
+  | None
+end
+
+def test_the_false_positive_rate_is_near_the_target():
+  let bf = bloom::add_all(bloom::for_capacity(1000, 0.01), names("item-", 1000))
+  | let hits = count_true(map(names("other-", 2000), fn(x): bloom::contains(bf, x);))
+  | assert_true(hits < 60)
+end
+
+def test_a_one_bit_filter_contains_everything_after_one_add():
+  let bf = bloom::add(bloom::new(1, 1), "a")
+  | assert_true(bloom::contains(bf, "anything"))
+end
+
+def test_bits_that_are_not_a_multiple_of_32_stay_in_range():
+  let bf = bloom::add_all(bloom::new(33, 3), names("x", 200))
+  | assert_eq(len(bf), 3 + 2)
+  | assert_true(bloom::fill_ratio(bf) <= 1)
+end
+
+def test_words_stay_below_two_to_the_32():
+  let bf = bloom::add_all(bloom::new(64, 4), names("x", 300))
+  | assert_eq(len(filter(slice(bf, 3, len(bf)), fn(w): w >= 4294967296 || w < 0 || w != floor(w);)), 0)
+end
+
+def test_membership_is_deterministic():
+  let a = bloom::add_all(bloom::for_capacity(100, 0.01), names("x", 20))
+  | let b = bloom::add_all(bloom::for_capacity(100, 0.01), names("x", 20))
+  | assert_eq(a, b)
+end
+
+def test_add_all_matches_adding_one_by_one():
+  let items = names("x", 25)
+  | let one_by_one = fold(items, bloom::for_capacity(100, 0.01), fn(bf, x): bloom::add(bf, x);)
+  | assert_eq(bloom::add_all(bloom::for_capacity(100, 0.01), items), one_by_one)
+end
+
+def test_add_all_of_nothing_changes_nothing():
+  let bf = bloom::for_capacity(100, 0.01)
+  | assert_eq(bloom::add_all(bf, []), bf)
+end
+
+def test_count_counts_every_add():
+  assert_eq(bloom::count(bloom::add_all(bloom::for_capacity(100, 0.01), names("x", 17))), 17)
+end
+
+# =========================================================================
+# fill ratio and error rate
+# =========================================================================
+
+def test_fill_ratio_matches_the_bits_set_when_nothing_collides():
+  let bf = bloom::add_all(bloom::new(1000000, 5), names("x", 10))
+  | assert_close(bloom::fill_ratio(bf), 50 / 1000000, 0.00001)
+end
+
+def test_fill_ratio_grows_with_items():
+  let few = bloom::add_all(bloom::for_capacity(1000, 0.01), names("x", 10))
+  | let many = bloom::add_all(bloom::for_capacity(1000, 0.01), names("x", 500))
+  | assert_true(bloom::fill_ratio(many) > bloom::fill_ratio(few))
+end
+
+def test_a_full_filter_is_nearly_half_set_at_capacity():
+  let bf = bloom::add_all(bloom::for_capacity(1000, 0.01), names("x", 1000))
+  | assert_close(bloom::fill_ratio(bf), 0.5, 0.05)
+end
+
+def test_estimated_error_rate_is_zero_when_empty_and_rises():
+  let empty = bloom::for_capacity(1000, 0.01)
+  | let full = bloom::add_all(empty, names("x", 1000))
+  | assert_eq(bloom::estimated_error_rate(empty), 0)
+  | assert_close(bloom::estimated_error_rate(full), 0.01, 0.006)
+end
+
+# =========================================================================
+# union
+# =========================================================================
+
+def test_union_contains_the_items_of_both():
+  let a = bloom::add_all(bloom::for_capacity(200, 0.01), names("a", 50))
+  | let b = bloom::add_all(bloom::for_capacity(200, 0.01), names("b", 50))
+  | let u = bloom::union(a, b)
+  | assert_eq(count_true(map(names("a", 50), fn(x): bloom::contains(u, x);)), 50)
+  | assert_eq(count_true(map(names("b", 50), fn(x): bloom::contains(u, x);)), 50)
+end
+
+def test_union_adds_the_counts():
+  let a = bloom::add_all(bloom::for_capacity(200, 0.01), names("a", 5))
+  | let b = bloom::add_all(bloom::for_capacity(200, 0.01), names("b", 7))
+  | assert_eq(bloom::count(bloom::union(a, b)), 12)
+end
+
+def test_union_is_the_same_as_adding_everything_to_one_filter():
+  let a = bloom::add_all(bloom::for_capacity(200, 0.01), names("a", 30))
+  | let b = bloom::add_all(bloom::for_capacity(200, 0.01), names("b", 30))
+  | let all = bloom::add_all(bloom::for_capacity(200, 0.01), names("a", 30) + names("b", 30))
+  | assert_eq(slice(bloom::union(a, b), 3, len(a)), slice(all, 3, len(all)))
+end
+
+def test_union_is_symmetric_in_its_bits():
+  let a = bloom::add_all(bloom::for_capacity(200, 0.01), names("a", 30))
+  | let b = bloom::add_all(bloom::for_capacity(200, 0.01), names("b", 30))
+  | assert_eq(slice(bloom::union(a, b), 3, len(a)), slice(bloom::union(b, a), 3, len(a)))
+end
+
+def test_union_with_an_empty_filter_keeps_the_bits():
+  let a = bloom::add_all(bloom::for_capacity(200, 0.01), names("a", 30))
+  | let u = bloom::union(a, bloom::for_capacity(200, 0.01))
+  | assert_eq(slice(u, 3, len(a)), slice(a, 3, len(a)))
+end
+
+def test_union_does_not_modify_its_inputs():
+  let a = bloom::add_all(bloom::for_capacity(200, 0.01), names("a", 10))
+  | let b = bloom::add_all(bloom::for_capacity(200, 0.01), names("b", 10))
+  | let a_before = a
+  | let b_before = b
+  | let _ = bloom::union(a, b)
+  | assert_eq(a, a_before)
+  | assert_eq(b, b_before)
+end
+
+def test_union_of_a_filter_with_itself_keeps_the_bits():
+  let a = bloom::add_all(bloom::for_capacity(200, 0.01), names("a", 10))
+  | assert_eq(slice(bloom::union(a, a), 3, len(a)), slice(a, 3, len(a)))
+end
+
+def test_union_rejects_filters_of_different_shape():
+  assert_eq(fails(fn(): bloom::union(bloom::new(100, 3), bloom::new(200, 3));), "failed")
+  | assert_eq(fails(fn(): bloom::union(bloom::new(100, 3), bloom::new(100, 4));), "failed")
+end

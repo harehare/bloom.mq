@@ -1,0 +1,31 @@
+import "bloom"
+
+# Each `_small` / `_large` pair runs the same work at two sizes. A time ratio close to the size ratio
+# means the work is linear; a ratio near its square means something copies on every step.
+
+def items(n): map(range(0, n - 1), fn(i): "item-" + to_string(i););
+
+def bench_add_small(): bloom::count(bloom::add_all(bloom::for_capacity(20000, 0.01), items(1000)));
+
+def bench_add_large(): bloom::count(bloom::add_all(bloom::for_capacity(20000, 0.01), items(4000)));
+
+def lookup(n):
+  let bf = bloom::add_all(bloom::for_capacity(20000, 0.01), items(500))
+  | len(filter(map(items(n), fn(x): bloom::contains(bf, x);), fn(x): x;))
+end
+
+def bench_contains_small(): lookup(1000);
+
+def bench_contains_large(): lookup(4000);
+
+def bench_fill_ratio_small(): bloom::fill_ratio(bloom::new(100000, 3));
+
+def bench_fill_ratio_large(): bloom::fill_ratio(bloom::new(400000, 3));
+
+def bench_union_small(): bloom::count(bloom::union(bloom::new(100000, 3), bloom::new(100000, 3)));
+
+def bench_union_large(): bloom::count(bloom::union(bloom::new(400000, 3), bloom::new(400000, 3)));
+
+def bench_new_small(): len(bloom::new(100000, 3));
+
+def bench_new_large(): len(bloom::new(400000, 3));
