@@ -31,10 +31,8 @@ def new(bits, hashes):
       | var i = 0
       | let n = _word_count(bits)
       | let _ = while (i < n):
-          do
-            a += [0]
-            | i = i + 1
-          end
+          a += [0]
+          | i = i + 1
         end
       | a
     end
@@ -68,13 +66,11 @@ def add(bf, item):
   | let pos = _positions(item, m, a[1])
   | var i = 0
   | let _ = while (i < len(pos)):
-      do
-        let w = 3 + floor(pos[i] / 32)
-        | let mask = shift_left(1, pos[i] % 32)
-        | let word = a[w]
-        | let _ = if (floor(word / mask) % 2 == 0): a[w] = word + mask else: None
-        | i = i + 1
-      end
+      let w = 3 + floor(pos[i] / 32)
+      | let mask = shift_left(1, pos[i] % 32)
+      | let word = a[w]
+      | let _ = if (floor(word / mask) % 2 == 0): a[w] = word + mask else: None
+      | i = i + 1
     end
   | a[2] = a[2] + 1
   | a
@@ -85,10 +81,8 @@ def add_all(bf, items):
   var a = bf
   | var i = 0
   | let _ = while (i < len(items)):
-      do
-        a = add(a, items[i])
-        | i = i + 1
-      end
+      a = add(a, items[i])
+      | i = i + 1
     end
   | a
 end
@@ -99,10 +93,8 @@ def contains(bf, item):
   | var i = 0
   | var found = true
   | let _ = while (found && i < len(pos)):
-      do
-        found = floor(bf[3 + floor(pos[i] / 32)] / shift_left(1, pos[i] % 32)) % 2 == 1
-        | i = i + 1
-      end
+      found = floor(bf[3 + floor(pos[i] / 32)] / shift_left(1, pos[i] % 32)) % 2 == 1
+      | i = i + 1
     end
   | found
 end
@@ -112,17 +104,13 @@ def fill_ratio(bf):
   var set_bits = 0
   | var w = 3
   | let _ = while (w < len(bf)):
-      do
-        var word = bf[w]
-        | var b = 0
-        | let _ = while (word > 0):
-            do
-              set_bits = set_bits + word % 2
-              | word = floor(word / 2)
-            end
-          end
-        | w = w + 1
-      end
+      var word = bf[w]
+      | var b = 0
+      | let _ = while (word > 0):
+          set_bits = set_bits + word % 2
+          | word = floor(word / 2)
+        end
+      | w = w + 1
     end
   | set_bits / bf[0]
 end
@@ -139,20 +127,16 @@ def union(a, b):
       var out = a
       | var w = 3
       | let _ = while (w < len(a)):
-          do
-            var other = b[w]
-            | var mask = 1
-            | var merged = out[w]
-            | let _ = while (other > 0):
-                do
-                  merged = merged + if (other % 2 == 1 && floor(merged / mask) % 2 == 0): mask else: 0
-                  | other = floor(other / 2)
-                  | mask = mask * 2
-                end
-              end
-            | out[w] = merged
-            | w = w + 1
-          end
+          var other = b[w]
+          | var mask = 1
+          | var merged = out[w]
+          | let _ = while (other > 0):
+              merged = merged + if (other % 2 == 1 && floor(merged / mask) % 2 == 0): mask else: 0
+              | other = floor(other / 2)
+              | mask = mask * 2
+            end
+          | out[w] = merged
+          | w = w + 1
         end
       | out[2] = a[2] + b[2]
       | out
