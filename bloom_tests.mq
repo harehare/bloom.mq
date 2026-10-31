@@ -119,12 +119,15 @@ def test_unicode_items():
   | assert_false(bloom::contains(bf, "日本"))
 end
 
+# How many of 300 added items a filter of `size` bits fails to find, which must be 0.
+def missed_items(size):
+  let items = names("item-", 300)
+  | let bf = bloom::add_all(bloom::new(size, 3), items)
+  | 300 - count_true(map(items, fn(x): bloom::contains(bf, x);))
+end
+
 def test_there_are_no_false_negatives():
-  let _ = foreach(size, [64, 500, 5000]):
-      let items = names("item-", 300)
-      | let bf = bloom::add_all(bloom::new(size, 3), items)
-      | assert_eq(count_true(map(items, fn(x): bloom::contains(bf, x);)), 300);
-  | None
+  assert_eq(filter([64, 500, 5000], fn(size): missed_items(size) != 0;), [])
 end
 
 def test_the_false_positive_rate_is_near_the_target():
