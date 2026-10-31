@@ -120,11 +120,10 @@ def test_unicode_items():
 end
 
 def test_there_are_no_false_negatives():
-  let _ = foreach(size, [64, 500, 5000]): do
+  let _ = foreach(size, [64, 500, 5000]):
       let items = names("item-", 300)
       | let bf = bloom::add_all(bloom::new(size, 3), items)
-      | assert_eq(count_true(map(items, fn(x): bloom::contains(bf, x);)), 300)
-    end;
+      | assert_eq(count_true(map(items, fn(x): bloom::contains(bf, x);)), 300);
   | None
 end
 
