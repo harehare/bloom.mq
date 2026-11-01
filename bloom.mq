@@ -1,24 +1,15 @@
 # A Bloom filter: a compact set that can say "definitely not in the set" or "probably in the set".
 #
 # The filter is a plain array: [bits, hashes, adds, word, word, ...]. The bits live 32 to a word, and
-# each item sets `hashes` of them, chosen from its SHA-256 digest by double hashing.
+# each item sets `hashes` of them, chosen from its `hash` by double hashing.
 
 def _word_count(bits): ceil(bits / 32);
 
-# Reads a hexadecimal string as a number.
-def _hex_to_number(hex): fold(explode(hex), 0, fn(acc, cp): acc * 16 + (if (cp < 58): cp - 48 else: cp - 87););
-
-# Returns the two base hashes of an item, the second one odd.
-def _base_hashes(item):
-  let digest = sha256(to_string(item))
-  | let h2 = _hex_to_number(digest[8:16])
-  | [_hex_to_number(digest[0:8]), h2 + 1 - h2 % 2]
-end
-
 # Returns the filter's bit positions for an item.
 def _positions(item, bits, hashes):
-  let h = _base_hashes(item)
-  | map(range(0, hashes - 1), fn(i): (h[0] + i * h[1]) % bits;)
+  let first = hash(to_string(item), 1) % bits
+  | let step = 1 + hash(to_string(item), 2) % max(bits - 1, 1)
+  | map(range(0, hashes - 1), fn(i): (first + i * step) % bits;)
 end
 
 # Returns an empty filter of `bits` bits that sets `hashes` bits per item.

@@ -49,7 +49,7 @@ A `true` from `contains` may be wrong, at about the rate you asked for. A `false
 - Items are compared by the string `to_string` gives for them, so `42` and `"42"` are the same item.
 - A filter is a plain array and every operation returns the updated filter. Write `bf = bloom::add(bf, x)` and do not read the old `bf` afterwards, so the update happens in place.
 - Items cannot be removed, and filters cannot be intersected.
-- Each item sets `hashes` bits chosen from its SHA-256 digest by double hashing. Bits are packed 32 to a number.
+- Each item sets `hashes` bits chosen from its `hash` by double hashing. Bits are packed 32 to a number.
 - `add` and `contains` cost O(`hashes`). `fill_ratio` and `union` cost O(`bits`).
 
 ## Development
