@@ -3,7 +3,7 @@
 > [!WARNING]
 > This project is currently under active development. APIs and features may change without notice.
 
-A Bloom filter for [mq](https://github.com/harehare/mq), as a module: a compact set that answers "definitely not in the set" or "probably in the set". Use it to skip work for items you have already seen, such as deduplicating a stream of lines or URLs.
+A Bloom filter for [mq](https://github.com/harehare/mq), as a module: a compact set that answers "definitely not in the set" or "probably in the set". Use it when you need a fixed-size summary of a set that can be merged or stored, for example one filter per file combined into one. To remember items within a single run, a dict with `has` is simpler and exact.
 
 ## Installation
 
