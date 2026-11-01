@@ -61,3 +61,5 @@ A `true` from `contains` may be wrong, at about the rate you asked for. A `false
 mq-test bloom_tests.mq
 mq-bench -L . bloom_bench.mq
 ```
+
+One of the goals of this module is also to check mq for performance problems, so it comes with a benchmark in `bloom_bench.mq`.
